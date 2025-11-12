@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dongle&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<title>ISG Heartbeat Analyzer</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; background: #f5f7fa; margin: 20px; color:#333; }
+  .dongle-regular { font-family: "Dongle", sans-serif; font-weight: 400; font-style: normal; }
+  
+  /* 🔹 상단 네비게이션 버튼 */
+  .top-nav {
+    display: flex; justify-content: flex-end; gap: 5px; margin-bottom: -10px;
+  }
+  .nav-btn {
+    background: #1e3a5f; color: white; border: none; border-radius: 8px;
+    padding: 4px 10px; height: 18px; line-height: 18px;
+    cursor: pointer; font-weight: 600; font-size: 0.75rem;
+    text-decoration: none; transition: background 0.2s;
+  }
+  .nav-btn:hover { background: #294b7a; }
+
+  /* 헤더 스타일 */
+  h1 {
+    font-size: 1.5em; background: #1e3a5f; color: white;
+    padding: 12px 18px; border-radius: 8px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-bottom: 5pt;
+  }
+  .title-left { font-size: 1.6em; line-height: 0.7; margin-bottom: 0; }
+  .subtitle { font-size: 0.7em; color: #bcd0f7; opacity: 0.9; margin-top: 2px; display: block; }
+  .date-container { text-align: right; line-height: 1.2; }
+  .version { font-size: 24px; color: #bcd0f7; opacity: 0.9; }
+  .date-header { font-size: 20px; color: #fff; margin: 0; }
+
+  /* 본문 스타일 */
+  .section { background: white; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  .section-header { background: #1e3a5f; color: white; padding: 6px 12px; border-radius: 8px 8px 0 0; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: center; font-size: 13px; }
+  th { background: #f0f2f5; font-weight: bold; }
+  tr.down-row { color: #999; background: #f9fafb; }
+
+  /* 💬 텍스트 입력 박스 스타일 */
+  .input-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    max-width: 95%;
+  }
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    border: 1.5px solid #cbd5e1;
+    font-family: monospace;
+    background: #fafafa;
+    resize: vertical;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transition: all 0.2s ease;
+  }
+  textarea:focus {
+    outline: none;
+    background: #fff;
+    border-color: #2563eb;
+    box-shadow: 0 4px 16px rgba(37,99,235,0.15);
+  }
+  .notice {
+    display: flex; justify-content: center; align-items: center; margin: 150px auto;
+  }
+  .notice-box {
+    display: flex; align-items: center;
+    background: linear-gradient(135deg, #e9eef8 0%, #f5f7fb 100%);
+    border: 1.5px solid #b0c4de;
+    border-radius: 20px;
+    padding: 15px 20px;
+    max-width: 680px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .notice-icon { font-size: 30px; margin-right: 12px; color: #1e3a5f; }
+  .notice-text { font-size: 14px; color: #2b2b2b; line-height: 1.6; }
+  .notice-text strong { color: #1e3a5f; }
+</style>
+</head>
+<body>
+
+<div class="top-nav">
+  <a href="https://etech-symantec.github.io/sysinfo" class="nav-btn">🧩 Sysinfo 분석</a>
+  <a href="https://etech-symantec.github.io/isg" class="nav-btn">📄 ISG 분석</a>
+  <a href="https://etech-symantec.github.io/trace" class="nav-btn">📄 Trace 분석</a>
+  <a href="https://etech-symantec.github.io/sizing-sg" class="nav-btn">📊 Sizing-SG 보기</a>
+</div>
+
+<h1 class="dongle-regular">
+  <div class="title-left">
+    ISG Heartbeat Analyzer<br>
+    <span class="subtitle">by 이테크시스템</span>
+  </div>
+  <div class="date-container">
+    <div class="version">ver.2025.11.12.01</div>
+    <div class="date-header" id="today-date"></div>
+  </div>
+</h1>
+
+<div class="section">
+  <div class="section-header">📥 Heartbeat JSON 붙여넣기</div>
+  <!-- 💬 중앙 입력 영역 -->
+<div class="input-area">
+  <textarea id="rawData" placeholder="localhost# diagnostics heartbeat view&#10;{ ... }"></textarea>
+</div>
+</div>
+
+<div id="result"></div>
+
+<script>
+document.getElementById("today-date").textContent =
+  "오늘 날짜: " + new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+
+const textarea = document.getElementById("rawData");
+const result = document.getElementById("result");
+
+textarea.addEventListener("input", () => analyze(textarea.value.trim()));
+
+function analyze(rawInput) {
+  result.innerHTML = "";
+  if (!rawInput) return;
+
+  let raw = rawInput.replace(/^[^\n]*#\s*diagnostics\s+heartbeat\s+view\s*\n?/i, "");
+
+  let data;
+  try { data = JSON.parse(raw); }
+  catch {
+    try {
+      const fixed = raw.replace(/^[^{]*/, "").replace(/}[^}]*$/, "}").replace(/[\x00-\x1F]/g, "").trim();
+      data = JSON.parse(fixed);
+    } catch {
+      result.innerHTML = "<p style='color:red;'>❌ JSON 형식 오류 - 자동 수정 실패</p>";
+      return;
+    }
+  }
+
+  const ms = data.machine_status || {};
+  const mc = data.machine_configuration || {};
+  const sw = data.software_configuration || {};
+  const isg = data.isg || {};
+
+  // ✅ Uptime 추출
+  let uptime = mc.uptime || ms.uptime || "-";
+  if (uptime === "-" && rawInput.match(/uptime/i)) {
+    const match = rawInput.match(/uptime["']?\s*[:=]?\s*"?([\w\s\d]+minutes?)/i);
+    if (match) uptime = match[1].trim();
+  }
+
+  // ✅ Byte → MB/GB 변환
+  const fmt = (b) => {
+    const n = parseFloat(b);
+    if (isNaN(n)) return "-";
+    const mb = n / (1024*1024);
+    return mb >= 1024 ? (mb/1024).toFixed(2)+" GB" : mb.toFixed(2)+" MB";
+  };
+
+  const pct = (v) => v ? (parseFloat(v)*100).toFixed(2)+"%" : "-";
+
+  const stats = isg.statistics || [];
+  const cpu = stats.find(s=>s.name?.includes("CPU")) || {};
+  const mem = stats.find(s=>s.name?.includes("Memory")) || {};
+
+  const cpuUsage = pct(cpu.avgInUse);
+  const memUsage = pct(mem.usage);
+
+  // ✅ Machine Info
+  const machineHTML = `
+  <div class="section">
+    <div class="section-header">① Machine Information</div>
+    <table>
+      <tr><th>Hostname</th><th>Serial Number</th><th>Uptime</th></tr>
+      <tr><td>${mc.hostname||"-"}</td><td>${data.serial_number||"-"}</td><td>${uptime}</td></tr>
+      <tr><th>Version</th><th>CPU Usage</th><th>Memory Usage</th></tr>
+      <tr><td>${sw.version||"-"}</td><td>${cpuUsage}</td><td>${memUsage}</td></tr>
+    </table>
+  </div>`;
+
+  // ✅ License 만료일 계산
+  const getDaysLeft = (expiry) => {
+    const d = new Date(expiry);
+    if (isNaN(d)) return "-";
+    const diff = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24));
+    if (diff > 0) return `${diff}일`;
+    if (diff === 0) return "Expires today";
+    return `${Math.abs(diff)}일`;
+  };
+
+  // ✅ Licenses
+  const licenses = (isg.licenses||[])
+    .filter(l=>l.model&&l.id&&l.expiry)
+    .map(l=>{
+      const left = getDaysLeft(l.expiry);
+      return `<tr><td>${l.licenseType||"-"}</td><td>${l.model}</td><td>${l.id}</td><td>${l.expiry} <span style='color:#1e3a5f; font-size:12px;'>(${left})</span></td></tr>`;
+    }).join("");
+
+  const licenseHTML = `
+  <div class="section">
+    <div class="section-header">② Licenses</div>
+    <table>
+      <tr><th>Type</th><th>Model</th><th>ID</th><th>Expiry</th></tr>
+      ${licenses||"<tr><td colspan='4'>-</td></tr>"}
+    </table>
+  </div>`;
+
+  // ✅ Applications
+  const apps = (isg.applications||[])
+    .map(a=>`<tr><td>${a.name||"-"}</td><td>${a.appModel||"-"}</td><td>${a.imageName||"-"}</td><td>${a.licenseId||"-"}</td><td>${a.networkDefinition||"-"}</td><td>${a.status||"-"}</td></tr>`).join("");
+  const appHTML = `
+  <div class="section">
+    <div class="section-header">③ Applications</div>
+    <table>
+      <tr><th>Name</th><th>App Model</th><th>Image Name</th><th>License ID</th><th>Network Definition</th><th>Status</th></tr>
+      ${apps||"<tr><td colspan='6'>-</td></tr>"}
+    </table>
+  </div>`;
+
+  // ✅ Network Interfaces
+  const nets = (ms.network_interfaces||[])
+    .filter(n=>n.name?.toLowerCase().startsWith("nic"))
+    .map(n=>{
+      const status=(n.status||"").toUpperCase();
+      const cls=(status==="DOWN"||status.includes("LOWER"))?"down-row":"";
+      return `<tr class="${cls}"><td>${n.name}</td><td>${status}</td><td>${fmt(n.rx_bytes)}</td><td>${fmt(n.tx_bytes)}</td></tr>`;
+    }).join("");
+  const netHTML = `
+  <div class="section">
+    <div class="section-header">④ Network Interfaces</div>
+    <table>
+      <tr><th>Name</th><th>Status</th><th>RX</th><th>TX</th></tr>
+      ${nets||"<tr><td colspan='4'>-</td></tr>"}
+    </table>
+  </div>`;
+
+  result.innerHTML = machineHTML + licenseHTML + appHTML + netHTML;
+}
+</script>
+</body>
+</html>
