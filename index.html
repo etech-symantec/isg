@@ -81,8 +81,16 @@
 <div id="result"></div>
 
 <script>
-document.getElementById("today-date").textContent =
-  "오늘 날짜: " + new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+const todayDateEl = document.getElementById("today-date");
+
+if (todayDateEl) {
+  todayDateEl.textContent =
+    "오늘 날짜: " + new Date().toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+}
 
 const textarea = document.getElementById("rawData");
 const result = document.getElementById("result");
