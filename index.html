@@ -81,10 +81,10 @@
 <label>실행 환경<select id="sshMode"><option value="ps">Windows PowerShell (SSH)</option><option value="unix">Linux / macOS / WSL (SSH)</option><option value="plink">Windows CMD (PuTTY Plink)</option></select></label>
 <label id="sshPasswordWrap" hidden>SSH 비밀번호 (Plink 전용)<input id="sshPassword" type="password" autocomplete="off"></label>
 </div>
-<p>장비에 SSH로 접속하여 <code>diagnostics heartbeat view</code>를 실행하고 결과를 <code>heartbeat.txt</code>로 저장합니다.</p>
+<p>SSH 원격 명령 실행을 지원하는 장비에서 <code>diagnostics heartbeat view</code>를 실행하고 결과를 <code>heartbeat.txt</code>로 저장합니다.</p>
 <button type="button" id="sshGenerate">명령어 생성</button><button type="button" id="sshCopy">명령어 복사</button><span id="sshStatus" role="status"></span>
 <pre class="ssh-output" id="sshOutput">장비 주소와 ID를 입력하세요.</pre><p id="sshHint"></p>
-<p class="ssh-note">curl은 SSH 프로토콜을 지원하지 않습니다. 생성된 명령어는 PC의 터미널에서 실행해야 합니다. 일반 SSH 방식은 접속 시 비밀번호를 입력합니다. Plink의 -pw 옵션은 비밀번호가 명령 기록과 프로세스 목록에 노출될 수 있어 운영 환경에서 권장하지 않습니다. 최초 연결 시 서버 호스트 키를 검증하세요.</p>
+<p class="ssh-note">curl은 SSH 프로토콜을 지원하지 않습니다. 생성된 명령어는 PC의 터미널에서 실행해야 합니다. 일반 SSH 방식은 접속 시 비밀번호를 입력합니다. Plink의 -pw 옵션은 비밀번호가 명령 기록과 프로세스 목록에 노출될 수 있어 운영 환경에서 권장하지 않습니다. 최초 연결 시 서버 호스트 키를 검증하세요. ISG가 SSH 원격 명령 실행을 지원하지 않아 exec request failed 오류가 발생하면 SSH로 직접 로그인하여 diagnostics heartbeat view를 실행해야 합니다.</p>
 </div></section>
 
 <script>
@@ -100,9 +100,9 @@ $('sshPasswordWrap').hidden=m!=='plink';status.textContent='';
 if(!h||!u){out.textContent='장비 주소와 SSH ID를 입력하세요.';return null;}
 if(!/^(?:[A-Za-z0-9][A-Za-z0-9._-]*|\[[0-9a-fA-F:]+\])$/.test(h)||h.length>253||!/^[A-Za-z0-9_.@-]{1,128}$/.test(u)||!Number.isInteger(p)||p<1||p>65535){out.textContent='입력값을 확인하세요.';return null;}
 let s;
-if(m==='ps'){s="('diagnostics heartbeat view', 'exit') | ssh -tt -p "+p+" -l "+ps(u)+" "+ps(h)+" | Tee-Object -FilePath .\\heartbeat.txt";hint.textContent='PowerShell에서 실행하세요. 비밀번호는 SSH 접속 프롬프트에서 입력합니다.';}
-else if(m==='unix'){s="printf 'diagnostics heartbeat view\\nexit\\n' | ssh -tt -p "+p+" -l "+sh(u)+" "+sh(h)+" 2>&1 | tee heartbeat.txt";hint.textContent='Linux/macOS/WSL 터미널에서 실행하세요.';}
-else{if(!pwd.value||/[\r\n\0]/.test(pwd.value)){out.textContent='Plink 방식은 비밀번호 입력이 필요합니다.';return null;}s='echo diagnostics heartbeat view | plink.exe -ssh -t -P '+p+' -l '+cmdq(u)+' -pw '+cmdq(pwd.value)+' '+cmdq(h)+' > heartbeat.txt';hint.textContent='Plink 설치 및 사전 호스트 키 검증이 필요하며 비밀번호가 노출됩니다.';}
+if(m==='ps'){s="ssh -tt -p "+p+" -l "+ps(u)+" "+ps(h)+" "+ps('diagnostics heartbeat view')+" | Tee-Object -FilePath .\\heartbeat.txt";hint.textContent='PowerShell에서 실행하세요. 비밀번호는 SSH 접속 프롬프트에서 입력합니다.';}
+else if(m==='unix'){s="ssh -tt -p "+p+" -l "+sh(u)+" "+sh(h)+" "+sh('diagnostics heartbeat view')+" 2>&1 | tee heartbeat.txt";hint.textContent='Linux/macOS/WSL 터미널에서 실행하세요.';}
+else{if(!pwd.value||/[\r\n\0]/.test(pwd.value)){out.textContent='Plink 방식은 비밀번호 입력이 필요합니다.';return null;}s='plink.exe -ssh -t -P '+p+' -l '+cmdq(u)+' -pw '+cmdq(pwd.value)+' '+cmdq(h)+' '+cmdq('diagnostics heartbeat view')+' > heartbeat.txt';hint.textContent='Plink 설치 및 사전 호스트 키 검증이 필요하며 비밀번호가 노출됩니다.';}
 out.textContent=s;return s;
 }
 [host,user,port,mode,pwd].forEach(x=>x.addEventListener('input',generate));
