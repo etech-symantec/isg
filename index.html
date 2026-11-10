@@ -59,6 +59,8 @@
   .notice-icon { font-size: 30px; margin-right: 12px; color: #1e3a5f; }
   .notice-text { font-size: 14px; color: #2b2b2b; line-height: 1.6; }
   .notice-text strong { color: #1e3a5f; }
+
+.ssh-builder{padding:20px}.ssh-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ssh-grid label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:bold}.ssh-grid input,.ssh-grid select{padding:10px;border:1px solid #cbd5e1;border-radius:9px;min-width:0}.ssh-builder button{background:#1e3a5f;color:white;border:0;border-radius:9px;padding:10px 16px;margin-right:8px;cursor:pointer}.ssh-output{white-space:pre-wrap;overflow-wrap:anywhere;background:#0f172a;color:#d1fae5;padding:16px;border-radius:10px}.ssh-note{font-size:12px;color:#6b5312;line-height:1.6}@media(max-width:650px){.ssh-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -66,10 +68,51 @@
 <!-- 공통 헤더 + 제목 + 버전 -->
 <script>
   window.pageTitle = "ISG Heartbeat 분석";
-  window.pageVersion = "ver.2026.10.02";
+  window.pageVersion = "ver.2026.11.10";
 </script> 
 <script src="https://etech-symantec.github.io/header.js"></script>
   
+
+<section class="section"><div class="section-header">🔐 ISG SSH Heartbeat 명령어 생성기</div><div class="ssh-builder">
+<div class="ssh-grid">
+<label>ISG IP / 호스트명<input id="sshHost" placeholder="192.168.1.10" autocomplete="off"></label>
+<label>SSH ID<input id="sshUser" placeholder="admin" autocomplete="off"></label>
+<label>SSH 포트<input id="sshPort" type="number" min="1" max="65535" value="22"></label>
+<label>실행 환경<select id="sshMode"><option value="ps">Windows PowerShell (SSH)</option><option value="unix">Linux / macOS / WSL (SSH)</option><option value="plink">Windows CMD (PuTTY Plink)</option></select></label>
+<label id="sshPasswordWrap" hidden>SSH 비밀번호 (Plink 전용)<input id="sshPassword" type="password" autocomplete="off"></label>
+</div>
+<p>장비에 SSH로 접속하여 <code>diagnostics heartbeat view</code>를 실행하고 결과를 <code>heartbeat.txt</code>로 저장합니다.</p>
+<button type="button" id="sshGenerate">명령어 생성</button><button type="button" id="sshCopy">명령어 복사</button><span id="sshStatus" role="status"></span>
+<pre class="ssh-output" id="sshOutput">장비 주소와 ID를 입력하세요.</pre><p id="sshHint"></p>
+<p class="ssh-note">curl은 SSH 프로토콜을 지원하지 않습니다. 생성된 명령어는 PC의 터미널에서 실행해야 합니다. 일반 SSH 방식은 접속 시 비밀번호를 입력합니다. Plink의 -pw 옵션은 비밀번호가 명령 기록과 프로세스 목록에 노출될 수 있어 운영 환경에서 권장하지 않습니다. 최초 연결 시 서버 호스트 키를 검증하세요.</p>
+</div></section>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const host=$('sshHost'),user=$('sshUser'),port=$('sshPort'),mode=$('sshMode'),pwd=$('sshPassword'),out=$('sshOutput'),hint=$('sshHint'),status=$('sshStatus');
+const ps=s=>"'"+s.replace(/'/g,"''")+"'";
+const sh=s=>"'"+s.replace(/'/g,"'\\''")+"'";
+const cmdq=s=>'"'+s.replace(/(["%&|<>^!])/g,'^$1')+'"';
+function generate(){
+const h=host.value.trim(),u=user.value.trim(),p=Number(port.value),m=mode.value;
+$('sshPasswordWrap').hidden=m!=='plink';status.textContent='';
+if(!h||!u){out.textContent='장비 주소와 SSH ID를 입력하세요.';return null;}
+if(!/^(?:[A-Za-z0-9][A-Za-z0-9._-]*|\[[0-9a-fA-F:]+\])$/.test(h)||h.length>253||!/^[A-Za-z0-9_.@-]{1,128}$/.test(u)||!Number.isInteger(p)||p<1||p>65535){out.textContent='입력값을 확인하세요.';return null;}
+let s;
+if(m==='ps'){s="('diagnostics heartbeat view', 'exit') | ssh -tt -p "+p+" -l "+ps(u)+" "+ps(h)+" | Tee-Object -FilePath .\\heartbeat.txt";hint.textContent='PowerShell에서 실행하세요. 비밀번호는 SSH 접속 프롬프트에서 입력합니다.';}
+else if(m==='unix'){s="printf 'diagnostics heartbeat view\\nexit\\n' | ssh -tt -p "+p+" -l "+sh(u)+" "+sh(h)+" 2>&1 | tee heartbeat.txt";hint.textContent='Linux/macOS/WSL 터미널에서 실행하세요.';}
+else{if(!pwd.value||/[\r\n\0]/.test(pwd.value)){out.textContent='Plink 방식은 비밀번호 입력이 필요합니다.';return null;}s='echo diagnostics heartbeat view | plink.exe -ssh -t -P '+p+' -l '+cmdq(u)+' -pw '+cmdq(pwd.value)+' '+cmdq(h)+' > heartbeat.txt';hint.textContent='Plink 설치 및 사전 호스트 키 검증이 필요하며 비밀번호가 노출됩니다.';}
+out.textContent=s;return s;
+}
+[host,user,port,mode,pwd].forEach(x=>x.addEventListener('input',generate));
+mode.addEventListener('change',()=>{pwd.value='';generate()});
+$('sshGenerate').addEventListener('click',()=>{if(generate())status.textContent='생성 완료'});
+$('sshCopy').addEventListener('click',async()=>{const s=generate();if(!s)return;try{await navigator.clipboard.writeText(s);status.textContent='복사 완료'}catch{status.textContent='복사 실패: 직접 선택해 주세요.'}});
+generate();
+})();
+</script>
+
 <div class="section">
   <div class="section-header">📥 Heartbeat JSON 붙여넣기</div>
   <!-- 💬 중앙 입력 영역 -->
